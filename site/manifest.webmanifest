@@ -1,0 +1,23 @@
+{
+  "id": "./",
+  "name": "FogOS — Personal Workspace",
+  "short_name": "FogOS",
+  "description": "Il tuo spazio personale per progetti, attività, note e collegamenti rapidi.",
+  "lang": "it-IT",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1016",
+  "theme_color": "#10131a",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "./assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Apri attività", "url": "./#tasks", "icons": [{ "src": "./assets/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Apri note", "url": "./#notes", "icons": [{ "src": "./assets/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}

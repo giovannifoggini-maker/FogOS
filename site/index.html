@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10131a">
+  <meta name="description" content="FogOS — il tuo spazio di lavoro personale, sul PC e sul telefono.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FogOS">
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./assets/icon-192.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <title>FogOS — Personal Workspace</title>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#dashboard" aria-label="FogOS Dashboard">
+        <span class="brand-mark"><span></span><span></span><span></span></span>
+        <span class="brand-copy"><strong>FogOS</strong><small>PERSONAL WORKSPACE</small></span>
+      </a>
+      <div class="sidebar-label">WORKSPACE</div>
+      <nav class="main-nav" aria-label="Navigazione principale">
+        <button class="nav-item active" data-view="dashboard"><span class="nav-icon">◫</span><span>Dashboard</span><span class="nav-dot"></span></button>
+        <button class="nav-item" data-view="apps"><span class="nav-icon">▦</span><span>Le mie app</span></button>
+        <button class="nav-item" data-view="tasks"><span class="nav-icon">✓</span><span>Attività</span><span class="nav-count" id="nav-task-count">0</span></button>
+        <button class="nav-item" data-view="notes"><span class="nav-icon">▤</span><span>Note</span></button>
+        <button class="nav-item" data-view="library"><span class="nav-icon">◇</span><span>Raccolta</span></button>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-progress">
+        <div class="progress-orbit"><span>✳</span></div>
+        <div class="progress-copy"><strong>Il tuo spazio</strong><small id="local-state">Pronto per iniziare</small></div>
+        <div class="state-light"></div>
+      </div>
+      <button class="nav-item settings-link" data-view="settings"><span class="nav-icon">⚙</span><span>Impostazioni</span></button>
+      <div class="sidebar-footer"><span class="online-indicator"></span> Tutto salvato localmente <span class="version">v1.0</span></div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button class="mobile-menu icon-button" id="mobile-menu" aria-label="Apri menu">☰</button>
+        <div class="breadcrumb"><span>Workspace</span><span class="crumb-slash">/</span><strong id="crumb-current">Dashboard</strong></div>
+        <div class="topbar-actions">
+          <label class="search-box" for="global-search"><span class="search-icon">⌕</span><input id="global-search" type="search" placeholder="Cerca in FogOS..." autocomplete="off"><kbd>⌘ K</kbd></label>
+          <button class="icon-button notification-button" id="focus-shortcut" aria-label="Apri focus timer" title="Focus timer">◷<span class="notification-dot"></span></button>
+          <button class="icon-button install-button" id="install-pwa" aria-label="Installa FogOS" title="Installa FogOS">⇩</button>
+          <div class="avatar" title="Profilo locale">F</div>
+        </div>
+      </header>
+
+      <section class="view is-active" id="view-dashboard" data-view-panel="dashboard">
+        <div class="welcome-row">
+          <div><div class="eyebrow"><span class="eyebrow-line"></span> IL TUO SPAZIO, IN UN UNICO POSTO</div><h1>Buonasera<span class="accent-dot">.</span></h1><p class="welcome-sub" id="today-description">Prenditi un momento per mettere in ordine le idee.</p></div>
+          <div class="date-chip"><span class="date-glyph">◷</span><span><strong id="current-time">--:--</strong><small id="current-date">Caricamento data</small></span></div>
+        </div>
+
+        <section class="hero-card">
+          <div class="hero-grid"></div><div class="hero-glow"></div>
+          <div class="hero-content"><div class="hero-pill"><span class="sparkle">✦</span> FOGOS WORKSPACE</div><h2>Le tue idee.<br><span>Il tuo ritmo.</span></h2><p>Un posto solo per organizzare progetti, appunti e strumenti. Il resto può aspettare.</p><div class="hero-actions"><button class="button-primary" id="hero-new-task">+ Nuova attività <span>↗</span></button><button class="button-ghost" data-view="apps">Esplora le app <span>→</span></button></div></div>
+          <div class="hero-art" aria-hidden="true"><div class="art-ring ring-one"></div><div class="art-ring ring-two"></div><div class="art-ring ring-three"></div><div class="art-core"><div class="art-mark"><i></i><i></i><i></i></div></div><div class="orbit-dot dot-one"></div><div class="orbit-dot dot-two"></div><div class="orbit-dot dot-three"></div><div class="floating-chip chip-one">✳ <span>FOCUS</span></div><div class="floating-chip chip-two"><span class="mini-bars"><i></i><i></i><i></i></span><span>IN FLOW</span></div></div>
+          <div class="hero-bottom"><span><i class="tiny-status"></i> Il tuo workspace è pronto</span><span>CREATO PER IL TUO FLUSSO <b>↗</b></span></div>
+        </section>
+
+        <div class="section-heading"><div><h2>Panoramica</h2><p>Un'occhiata veloce a quello che conta.</p></div><button class="text-button" data-view="tasks">Tutte le attività <span>→</span></button></div>
+        <div class="stats-grid">
+          <article class="stat-card"><div class="stat-top"><span class="stat-icon icon-lime">✓</span><span class="stat-overline">ATTIVITÀ</span><span class="stat-trend">↗</span></div><div class="stat-value" id="stat-pending">0</div><div class="stat-bottom"><span>Da completare</span><span class="stat-caption" id="stat-done">0 completate</span></div><div class="stat-line"><span id="task-progress-line"></span></div></article>
+          <article class="stat-card"><div class="stat-top"><span class="stat-icon icon-violet">▤</span><span class="stat-overline">NOTE</span><span class="stat-trend">↗</span></div><div class="stat-value" id="stat-notes">0</div><div class="stat-bottom"><span>Idee salvate</span><span class="stat-caption">Solo sul dispositivo</span></div><div class="mini-sparkline"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></article>
+          <article class="stat-card"><div class="stat-top"><span class="stat-icon icon-blue">▦</span><span class="stat-overline">APP</span><span class="stat-trend">↗</span></div><div class="stat-value" id="stat-apps">6</div><div class="stat-bottom"><span>Collegamenti rapidi</span><button class="inline-link" data-view="apps">Gestisci →</button></div><div class="app-mini-stack"><span>F</span><span>S</span><span>✦</span><span>+3</span></div></article>
+        </div>
+
+        <div class="dashboard-columns">
+          <section class="panel tasks-panel"><div class="panel-heading"><div><div class="panel-kicker">LA TUA GIORNATA</div><h3>Prossime attività</h3></div><button class="small-add" id="quick-add-task" aria-label="Aggiungi attività">+</button></div><div class="task-list" id="dashboard-task-list"></div><div class="panel-bottom"><button class="subtle-button" data-view="tasks">Apri elenco attività <span>→</span></button><span class="live-label"><i></i> AGGIORNATO</span></div></section>
+          <section class="panel focus-panel"><div class="panel-heading"><div><div class="panel-kicker">MOMENTO PRESENTE</div><h3>Focus session</h3></div><span class="focus-status" id="focus-state">PRONTO</span></div><div class="timer-wrap"><svg class="timer-ring" viewBox="0 0 180 180" aria-label="Timer focus"><circle class="timer-track" cx="90" cy="90" r="77"></circle><circle class="timer-progress" id="timer-progress" cx="90" cy="90" r="77"></circle></svg><div class="timer-content"><div class="timer-time" id="timer-display">25:00</div><div class="timer-caption" id="timer-caption">MINUTI DI FOCUS</div><div class="timer-dots"><i></i><i></i><i></i><i></i></div></div></div><div class="timer-controls"><button class="button-primary timer-main" id="timer-toggle">Inizia focus <span>▶</span></button><button class="icon-button timer-reset" id="timer-reset" aria-label="Reimposta timer">↺</button></div><div class="focus-note"><span>✦</span> Una cosa alla volta. Stai andando bene.</div></section>
+        </div>
+
+        <div class="section-heading apps-heading"><div><h2>Accesso rapido</h2><p>Apri i tuoi strumenti in un attimo.</p></div><button class="text-button" data-view="apps">Tutte le app <span>→</span></button></div>
+        <div class="app-grid" id="dashboard-app-grid"></div>
+        <footer class="content-footer"><span>FOGOS <span class="footer-sep">/</span> PERSONAL WORKSPACE</span><span>Il tuo spazio, alle tue regole. <span class="footer-star">✦</span></span></footer>
+      </section>
+
+      <section class="view" id="view-apps" data-view-panel="apps">
+        <div class="page-intro"><div class="eyebrow"><span class="eyebrow-line"></span> I TUOI STRUMENTI</div><h1>Le mie app<span class="accent-dot">.</span></h1><p>Tutti i tuoi progetti, raccolti in un unico posto.</p></div>
+        <div class="toolbar-row"><label class="filter-search"><span>⌕</span><input id="app-filter" placeholder="Filtra app..." type="search"></label><button class="button-primary" id="add-app">+ Aggiungi collegamento</button></div>
+        <div class="app-grid full-app-grid" id="full-app-grid"></div>
+        <div class="helper-banner"><span class="helper-icon">↗</span><div><strong>Hai un altro progetto?</strong><p>Aggiungi il suo collegamento e lo ritroverai qui, anche sul telefono.</p></div><button class="text-button" id="add-app-secondary">Aggiungi app <span>→</span></button></div>
+      </section>
+
+      <section class="view" id="view-tasks" data-view-panel="tasks">
+        <div class="page-intro"><div class="eyebrow"><span class="eyebrow-line"></span> ORGANIZZATI CON CALMA</div><h1>Attività<span class="accent-dot">.</span></h1><p>Fai spazio nella testa. Una cosa alla volta.</p></div>
+        <div class="task-overview-strip"><div><span class="task-overview-icon">✓</span><div><strong id="tasks-page-pending">0</strong><small>Da completare</small></div></div><div><span class="task-overview-icon completed">✦</span><div><strong id="tasks-page-done">0</strong><small>Completate</small></div></div><div><span class="task-overview-icon">◷</span><div><strong id="tasks-page-total">0</strong><small>In totale</small></div></div></div>
+        <div class="panel task-manager"><div class="panel-heading"><div><div class="panel-kicker">TASK MANAGER</div><h3>La tua lista</h3></div><button class="button-primary" id="task-page-add">+ Nuova attività</button></div><div class="task-tabs"><button class="task-tab active" data-task-filter="all">Tutte <span id="filter-all-count">0</span></button><button class="task-tab" data-task-filter="pending">Da fare <span id="filter-pending-count">0</span></button><button class="task-tab" data-task-filter="done">Completate <span id="filter-done-count">0</span></button></div><div class="task-list full-task-list" id="full-task-list"></div><div class="empty-hint" id="task-empty-hint" hidden>Qui è tutto in ordine. Aggiungi una nuova attività quando vuoi.</div></div>
+      </section>
+
+      <section class="view" id="view-notes" data-view-panel="notes">
+        <div class="page-intro"><div class="eyebrow"><span class="eyebrow-line"></span> CATTURA LE IDEE</div><h1>Note<span class="accent-dot">.</span></h1><p>Pensieri, promemoria e idee salvati nel tuo spazio personale.</p></div>
+        <div class="notes-toolbar"><div class="note-search"><span>⌕</span><input id="note-search" type="search" placeholder="Cerca nelle note..."></div><button class="button-primary" id="new-note">+ Nuova nota</button></div>
+        <div class="notes-grid" id="notes-grid"></div><div class="empty-hint" id="notes-empty-hint" hidden>La pagina è vuota. Cattura la prima idea con “Nuova nota”.</div>
+        <p class="privacy-note"><span>⌂</span> Le tue note restano in questo browser. Non vengono inviate a un server.</p>
+      </section>
+
+      <section class="view" id="view-library" data-view-panel="library">
+        <div class="page-intro"><div class="eyebrow"><span class="eyebrow-line"></span> IL TUO POSTO PREFERITO</div><h1>Raccolta<span class="accent-dot">.</span></h1><p>Salva collegamenti utili e ritrovali quando ti servono.</p></div>
+        <div class="toolbar-row"><label class="filter-search"><span>⌕</span><input id="link-filter" type="search" placeholder="Cerca collegamenti..."></label><button class="button-primary" id="add-link">+ Aggiungi link</button></div>
+        <div class="library-grid" id="library-grid"></div><div class="empty-hint" id="library-empty-hint" hidden>Nessun link salvato. Aggiungi il primo collegamento.</div>
+      </section>
+
+      <section class="view" id="view-settings" data-view-panel="settings">
+        <div class="page-intro"><div class="eyebrow"><span class="eyebrow-line"></span> PERSONALIZZA IL TUO SPAZIO</div><h1>Impostazioni<span class="accent-dot">.</span></h1><p>Le preferenze vengono salvate su questo dispositivo.</p></div>
+        <div class="settings-grid"><section class="panel settings-panel"><div class="panel-heading"><div><div class="panel-kicker">INTERFACCIA</div><h3>Aspetto e lingua</h3></div><span class="setting-icon">◈</span></div><div class="setting-row"><div><strong>Tema</strong><small>Il tema scuro è l'identità visiva di FogOS.</small></div><span class="setting-chip"><i></i> Dark mode</span></div><div class="setting-row"><div><strong>Colore accento</strong><small>Scegli un accento per i dettagli dell'interfaccia.</small></div><div class="accent-options"><button class="accent-choice selected" data-accent="#b8f36c" style="--swatch:#b8f36c" aria-label="Verde lime"></button><button class="accent-choice" data-accent="#8d8aff" style="--swatch:#8d8aff" aria-label="Viola"></button><button class="accent-choice" data-accent="#6bd8f2" style="--swatch:#6bd8f2" aria-label="Azzurro"></button><button class="accent-choice" data-accent="#f1b779" style="--swatch:#f1b779" aria-label="Arancio"></button></div></div><div class="setting-row"><div><strong>Avvio</strong><small>Apri FogOS direttamente nella dashboard.</small></div><span class="setting-chip">Dashboard</span></div></section><section class="panel settings-panel"><div class="panel-heading"><div><div class="panel-kicker">DATI LOCALI</div><h3>Privacy e backup</h3></div><span class="setting-icon">⌂</span></div><div class="setting-row"><div><strong>Esporta dati</strong><small>Scarica note, attività e collegamenti in un file JSON.</small></div><button class="outline-button" id="export-data">Esporta dati ↗</button></div><div class="setting-row"><div><strong>Importa backup</strong><small>Ripristina un backup creato da FogOS.</small></div><label class="outline-button file-button">Importa file<input type="file" id="import-data" accept="application/json"></label></div><div class="setting-row danger-row"><div><strong>Reimposta workspace</strong><small>Rimuove i dati salvati in questo browser.</small></div><button class="danger-button" id="reset-data">Reimposta</button></div></section><section class="panel settings-panel about-panel"><div class="panel-kicker">INFORMAZIONI</div><h3>FogOS <span class="version-badge">v1.0.0</span></h3><p>Uno spazio personale leggero, pensato per stare bene sia sul desktop che sul telefono. Nessun account richiesto e nessun backend necessario.</p><div class="about-points"><span>✓ Installabile come PWA</span><span>✓ Funzioni essenziali offline</span><span>✓ Dati salvati nel browser</span></div></section></div>
+      </section>
+
+      <footer class="content-footer mobile-footer"><span>FOGOS <span class="footer-sep">/</span> PERSONAL WORKSPACE</span><span>Dati sul dispositivo <span class="footer-star">✦</span></span></footer>
+    </main>
+  </div>
+
+  <div class="mobile-scrim" id="mobile-scrim"></div>
+  <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
+  <dialog class="modal" id="task-modal"><form method="dialog" id="task-form"><div class="modal-head"><div><div class="panel-kicker">TASK MANAGER</div><h3 id="task-modal-title">Nuova attività</h3></div><button class="modal-close" value="cancel" aria-label="Chiudi">×</button></div><label class="form-label">Titolo attività<input id="task-title" maxlength="120" required placeholder="Es. Finire il progetto..."></label><label class="form-label">Quando?<select id="task-due"><option value="Oggi">Oggi</option><option value="Domani">Domani</option><option value="Questa settimana">Questa settimana</option><option value="Senza scadenza">Senza scadenza</option></select></label><label class="form-label">Priorità<select id="task-priority"><option value="normal">Normale</option><option value="high">Alta</option><option value="low">Bassa</option></select></label><div class="modal-actions"><button class="outline-button" value="cancel">Annulla</button><button class="button-primary" id="save-task" value="default">Salva attività <span>→</span></button></div></form></dialog>
+  <dialog class="modal" id="note-modal"><form method="dialog" id="note-form"><div class="modal-head"><div><div class="panel-kicker">NOTE</div><h3 id="note-modal-title">Nuova nota</h3></div><button class="modal-close" value="cancel" aria-label="Chiudi">×</button></div><label class="form-label">Titolo<input id="note-title" maxlength="100" placeholder="Dai un titolo alla tua idea"></label><label class="form-label">Contenuto<textarea id="note-body" rows="6" maxlength="12000" placeholder="Scrivi qualcosa da ricordare..."></textarea></label><div class="modal-actions"><button class="outline-button" value="cancel">Annulla</button><button class="button-primary" id="save-note" value="default">Salva nota <span>→</span></button></div></form></dialog>
+  <dialog class="modal" id="app-modal"><form method="dialog" id="app-form"><div class="modal-head"><div><div class="panel-kicker">APP LAUNCHER</div><h3 id="app-modal-title">Aggiungi un collegamento</h3></div><button class="modal-close" value="cancel" aria-label="Chiudi">×</button></div><label class="form-label">Nome app<input id="app-name" maxlength="60" required placeholder="Es. Il mio progetto"></label><label class="form-label">Descrizione<input id="app-description" maxlength="120" placeholder="A cosa serve?"></label><label class="form-label">Indirizzo web<input id="app-url" type="url" placeholder="https://..." required></label><label class="form-label">Icona<select id="app-icon"><option value="✦">✦ Stella</option><option value="◈">◈ Diamante</option><option value="⌘">⌘ Strumento</option><option value="▦">▦ Griglia</option><option value="◉">◉ Cerchio</option><option value="↗">↗ Freccia</option><option value="⚡">⚡ Fulmine</option></select></label><div class="modal-actions"><button class="outline-button" value="cancel">Annulla</button><button class="button-primary" id="save-app" value="default">Salva collegamento <span>→</span></button></div><p class="form-footnote">I collegamenti sono salvati solo in questo browser. Modifica in seguito per aggiornare l'indirizzo.</p></form></dialog>
+  <dialog class="modal" id="link-modal"><form method="dialog" id="link-form"><div class="modal-head"><div><div class="panel-kicker">RACCOLTA PERSONALE</div><h3>Aggiungi un link</h3></div><button class="modal-close" value="cancel" aria-label="Chiudi">×</button></div><label class="form-label">Titolo<input id="link-title" maxlength="80" required placeholder="Es. Documentazione utile"></label><label class="form-label">Indirizzo web<input id="link-url" type="url" required placeholder="https://..." ></label><label class="form-label">Categoria<select id="link-category"><option>Preferiti</option><option>Studio</option><option>Progetti</option><option>Strumenti</option><option>Altro</option></select></label><div class="modal-actions"><button class="outline-button" value="cancel">Annulla</button><button class="button-primary" id="save-link" value="default">Salva link <span>→</span></button></div></form></dialog>
+  <dialog class="modal confirm-modal" id="confirm-modal"><form method="dialog"><div class="confirm-symbol">!</div><h3 id="confirm-title">Sei sicuro?</h3><p id="confirm-message">Questa azione non può essere annullata.</p><div class="modal-actions"><button class="outline-button" value="cancel">Annulla</button><button class="danger-button" id="confirm-action" value="default">Conferma</button></div></form></dialog>
+  <script src="./app.js" defer></script>
+</body>
+</html>
