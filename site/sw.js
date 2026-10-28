@@ -1,7 +1,7 @@
 'use strict';
-const CACHE_NAME = 'fogos-static-v1.0.0';
+const CACHE_NAME = 'fogos-static-v1.1.0';
 const CORE_ASSETS = [
-  './', './index.html', './styles.css', './app.js', './manifest.webmanifest',
+  './', './index.html', './styles.css', './config.js', './app.js', './manifest.webmanifest',
   './assets/favicon.svg', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png'
 ];
 self.addEventListener('install', event => {
@@ -12,7 +12,9 @@ self.addEventListener('activate', event => {
 });
 self.addEventListener('fetch', event => {
   const request = event.request;
-  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  const requestUrl = new URL(request.url);
+  // Never cache authentication or personal cloud API responses in the PWA shell.
+  if (request.method !== 'GET' || requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith('/api/')) return;
   event.respondWith(caches.match(request).then(cached => {
     if (cached) return cached;
     return fetch(request).then(response => {

@@ -1,5 +1,7 @@
 'use strict';
 const STORAGE_KEY = 'fogos.workspace.v1';
+const LOCAL_BACKUP_KEY = 'fogos.workspace.precloud.v1';
+const API_BASE_URL = String(window.FOGOS_CONFIG?.apiBaseUrl || '').replace(/\/+$/, '');
 const defaults = {
   tasks: [
     { id: 't1', title: 'Dare una forma alle idee di oggi', due: 'Oggi', priority: 'high', done: false, created: Date.now() - 5000 },
@@ -21,6 +23,7 @@ const defaults = {
   ],
   links: [],
   accent: '#b8f36c',
+  metalLevel: 'medium',
   timerMinutes: 25
 };
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -36,6 +39,15 @@ let timerRunning = false;
 let timerEndAt = 0;
 let activeView = 'dashboard';
 let installPromptEvent = null;
+let accountUser = null;
+let apiAvailable = false;
+let accountSyncReady = false;
+let accountBusy = false;
+let cloudSyncTimer = null;
+let cloudSyncInFlight = false;
+let cloudSyncQueued = false;
+let accountModalMode = 'login';
+let lastCloudUpdatedAt = null;
 window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); installPromptEvent = event; });
 const $ = id => document.getElementById(id);
 
@@ -54,8 +66,199 @@ function loadState() {
   } catch (error) { console.warn('FogOS local data could not be read:', error); return clone(defaults); }
 }
 function saveState() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); $('local-state').textContent = 'Modifiche salvate'; }
-  catch (error) { console.warn('FogOS could not save to local storage:', error); toast('Memoria locale piena: esporta un backup.', true); }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if ($('local-state')) $('local-state').textContent = accountUser && accountSyncReady ? 'Salvato · sync cloud attiva' : 'Modifiche salvate';
+    scheduleCloudSync();
+  } catch (error) {
+    console.warn('FogOS could not save to local storage:', error);
+    toast('Memoria locale piena: esporta un backup.', true);
+  }
+}
+function apiUrl(path) { return `${API_BASE_URL}${path}`; }
+async function apiRequest(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  const response = await fetch(apiUrl(path), { ...options, headers, credentials: 'include', cache: 'no-store' });
+  let payload = {};
+  try { payload = response.headers.get('content-type')?.includes('application/json') ? await response.json() : {}; }
+  catch { payload = {}; }
+  if (!response.ok) {
+    const error = new Error(payload.error || `Richiesta non riuscita (HTTP ${response.status}).`);
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+function hasUsableWorkspace(value) {
+  return value && typeof value === 'object' && Array.isArray(value.tasks) && Array.isArray(value.notes) && Array.isArray(value.apps) && Array.isArray(value.links);
+}
+function normalizeWorkspace(value) {
+  if (!hasUsableWorkspace(value)) throw new Error('I dati restituiti dal cloud non sono validi.');
+  return { ...clone(defaults), ...value, tasks: value.tasks, notes: value.notes, apps: value.apps, links: value.links };
+}
+function scheduleCloudSync() {
+  if (!accountUser || !apiAvailable || !accountSyncReady) return;
+  if (cloudSyncInFlight) { cloudSyncQueued = true; return; }
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = window.setTimeout(() => syncCloudNow({ silent: true }), 750);
+}
+async function syncCloudNow({ silent = false } = {}) {
+  if (!accountUser || !apiAvailable || !accountSyncReady) return;
+  if (cloudSyncInFlight) { cloudSyncQueued = true; return; }
+  cloudSyncInFlight = true;
+  const snapshot = JSON.stringify(state);
+  try {
+    const result = await apiRequest('/api/data', { method: 'PUT', body: JSON.stringify({ data: JSON.parse(snapshot) }) });
+    lastCloudUpdatedAt = result.updatedAt || new Date().toISOString();
+    if ($('local-state')) $('local-state').textContent = 'Sincronizzato nel cloud';
+    if ($('account-settings-status')) $('account-settings-status').textContent = 'Connesso · sincronizzato';
+    if (!silent) toast('Workspace sincronizzato.');
+  } catch (error) {
+    console.warn('FogOS cloud sync failed:', error);
+    if (error.status === 401) { accountUser = null; accountSyncReady = false; updateAccountUI(); }
+    else if ($('local-state')) $('local-state').textContent = 'Salvato localmente · sync in attesa';
+    if (!silent) toast(error.message || 'Sincronizzazione cloud non riuscita.', true);
+  } finally {
+    cloudSyncInFlight = false;
+    if (cloudSyncQueued) { cloudSyncQueued = false; scheduleCloudSync(); }
+  }
+}
+async function restoreCloudWorkspace() {
+  accountSyncReady = false;
+  const result = await apiRequest('/api/data');
+  if (result.data) {
+    if (JSON.stringify(state) !== JSON.stringify(result.data)) {
+      try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify({ app: 'FogOS', version: '1.1.0', exportedAt: new Date().toISOString(), data: state })); } catch {}
+    }
+    state = normalizeWorkspace(result.data);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    renderAll();
+  }
+  accountSyncReady = true;
+  if (!result.data) await syncCloudNow({ silent: true });
+  updateAccountUI();
+}
+async function initAccount() {
+  try {
+    const health = await apiRequest('/api/health');
+    apiAvailable = health?.ok === true && health?.auth === true;
+  } catch { apiAvailable = false; }
+  if (!apiAvailable) { updateAccountUI(); return; }
+  try {
+    const result = await apiRequest('/api/auth/me');
+    accountUser = result.user || null;
+    if (accountUser) await restoreCloudWorkspace();
+  } catch (error) {
+    if (error.status && error.status !== 401) console.warn('FogOS could not restore account:', error);
+    accountUser = null;
+    accountSyncReady = false;
+  }
+  updateAccountUI();
+}
+function updateAccountUI() {
+  const logged = Boolean(accountUser);
+  const label = $('account-status-label');
+  if (label) label.textContent = logged ? (accountUser.displayName || accountUser.email || 'Account') : (apiAvailable ? 'Accedi' : 'Solo locale');
+  const avatar = $('account-open');
+  if (avatar) { avatar.textContent = logged ? String(accountUser.displayName || accountUser.email || 'F').trim().slice(0, 1).toUpperCase() : 'F'; avatar.title = logged ? `Connesso come ${accountUser.email}` : 'Accedi o crea un account FogOS'; }
+  const storageLabel = $('storage-mode-label');
+  if (storageLabel) storageLabel.textContent = logged ? 'Cloud + locale' : 'Salvataggio locale';
+  const localState = $('local-state');
+  if (localState && !logged) localState.textContent = apiAvailable ? 'Account cloud disponibile' : 'Pronto per iniziare';
+  const summary = $('account-settings-summary');
+  if (summary) summary.textContent = logged
+    ? `Connesso come ${accountUser.displayName || accountUser.email} (${accountUser.email}). Note, attività, app e raccolta vengono sincronizzate automaticamente.`
+    : apiAvailable
+      ? 'Il servizio account è disponibile. Accedi o crea un account per portare il workspace su altri dispositivi.'
+      : 'Modalità ospite. Il workspace resta su questo browser; registra un account quando FogOS sarà pubblicato su Cloudflare Pages con il database configurato.';
+  if ($('account-settings-status')) $('account-settings-status').textContent = logged ? 'Account connesso' : apiAvailable ? 'Cloud pronto · non connesso' : 'Solo locale';
+  if ($('account-status-dot')) $('account-status-dot').classList.toggle('connected', logged && accountSyncReady);
+  if ($('account-settings-open')) $('account-settings-open').hidden = logged;
+  if ($('account-settings-logout')) $('account-settings-logout').hidden = !logged;
+  if ($('account-sync-now')) $('account-sync-now').hidden = !logged;
+  if ($('local-backup-row')) $('local-backup-row').hidden = !localStorage.getItem(LOCAL_BACKUP_KEY);
+  if ($('note-storage-caption')) $('note-storage-caption').textContent = logged ? 'Sincronizzate nel cloud' : 'Solo sul dispositivo';
+  if ($('account-legal') && !apiAvailable) $('account-legal').textContent = 'Per registrazione, login e sincronizzazione serve il backend Cloudflare Pages con il database D1 configurato. In questa pubblicazione statica i dati restano locali.';
+}
+function setAccountMode(mode) {
+  accountModalMode = mode === 'register' ? 'register' : 'login';
+  const registering = accountModalMode === 'register';
+  $('account-mode-login').classList.toggle('active', !registering);
+  $('account-mode-register').classList.toggle('active', registering);
+  $('account-name-wrap').hidden = !registering;
+  $('account-password-confirm-wrap').hidden = !registering;
+  $('account-name').required = registering;
+  $('account-password-confirm').required = registering;
+  $('account-password').autocomplete = registering ? 'new-password' : 'current-password';
+  $('account-modal-title').textContent = registering ? 'Crea il tuo FogOS ID' : 'Accedi al tuo spazio';
+  $('account-modal-intro').textContent = registering ? 'Crea un account per avere il tuo workspace anche su altri dispositivi.' : 'Accedi per sincronizzare note, attività e collegamenti su tutti i tuoi dispositivi.';
+  $('account-submit').innerHTML = registering ? 'Crea account <span>→</span>' : 'Accedi <span>→</span>';
+  $('account-feedback').hidden = true;
+  $('account-feedback').textContent = '';
+  $('account-submit').disabled = !apiAvailable;
+  if (!apiAvailable) setAccountFeedback('Il backend account non è configurato su questo sito. Usa la versione pubblicata su Cloudflare Pages dopo aver collegato il database D1.', true);
+}
+function setAccountFeedback(message, error = false) {
+  const el = $('account-feedback'); if (!el) return;
+  el.textContent = message; el.hidden = false; el.classList.toggle('error', error);
+}
+function openAccountModal(mode = 'login') {
+  if (accountUser) { setView('settings'); toast('Il tuo account è disponibile nelle impostazioni.'); return; }
+  setAccountMode(mode);
+  $('account-form').reset();
+  $('account-password').type = 'password'; $('account-password-confirm').type = 'password';
+  $('account-submit').disabled = !apiAvailable;
+  if (typeof $('account-modal').showModal === 'function') $('account-modal').showModal(); else $('account-modal').setAttribute('open', '');
+}
+async function submitAccountForm(event) {
+  event.preventDefault();
+  if (accountBusy) return;
+  if (!apiAvailable) { setAccountFeedback('Il servizio cloud non è configurato. I dati attuali restano sul dispositivo.', true); return; }
+  const email = $('account-email').value.trim().toLowerCase();
+  const password = $('account-password').value;
+  const displayName = $('account-name').value.trim();
+  if (!email || !password) { setAccountFeedback('Inserisci email e password.', true); return; }
+  if (accountModalMode === 'register') {
+    if (!displayName) { setAccountFeedback('Inserisci il nome da visualizzare.', true); return; }
+    if (password.length < 12) { setAccountFeedback('Usa una password di almeno 12 caratteri.', true); return; }
+    if (password !== $('account-password-confirm').value) { setAccountFeedback('Le due password non coincidono.', true); return; }
+  }
+  accountBusy = true;
+  const submit = $('account-submit'); submit.disabled = true; submit.textContent = accountModalMode === 'register' ? 'Creazione account…' : 'Accesso…';
+  try {
+    const route = accountModalMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+    const body = accountModalMode === 'register' ? { displayName, email, password } : { email, password };
+    const result = await apiRequest(route, { method: 'POST', body: JSON.stringify(body) });
+    accountUser = result.user; accountSyncReady = false;
+    await restoreCloudWorkspace();
+    closeDialog('account-modal');
+    updateAccountUI();
+    toast(accountModalMode === 'register' ? 'Account creato. Workspace sincronizzato.' : 'Accesso effettuato. Workspace sincronizzato.');
+  } catch (error) {
+    setAccountFeedback(error.message || 'Non è stato possibile completare la richiesta.', true);
+  } finally {
+    accountBusy = false;
+    submit.disabled = !apiAvailable;
+    submit.innerHTML = accountModalMode === 'register' ? 'Crea account <span>→</span>' : 'Accedi <span>→</span>';
+  }
+}
+async function logoutAccount() {
+  if (!accountUser) return;
+  clearTimeout(cloudSyncTimer);
+  if (accountSyncReady && apiAvailable) await syncCloudNow({ silent: true });
+  try { await apiRequest('/api/auth/logout', { method: 'POST', body: '{}' }); }
+  catch (error) { if (error.status !== 401) { toast('Logout cloud non confermato. Controlla la connessione.', true); return; } }
+  accountUser = null; accountSyncReady = false; clearTimeout(cloudSyncTimer); updateAccountUI(); toast('Hai effettuato la disconnessione. I dati cloud restano nel tuo account.');
+}
+function exportLocalBackup() {
+  let backup;
+  try { backup = JSON.parse(localStorage.getItem(LOCAL_BACKUP_KEY) || 'null'); } catch { backup = null; }
+  if (!backup) { toast('Nessun backup locale precedente disponibile.', true); return; }
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob); const a = document.createElement('a');
+  a.href = url; a.download = `fogos-backup-locale-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url); toast('Backup locale esportato.');
 }
 function uid(prefix='x') { return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`; }
 function escapeHtml(value='') { return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])); }
@@ -145,7 +348,7 @@ function renderLinks() {
   $('library-grid').innerHTML = shown.map(link => `<article class="library-card"><span class="library-symbol">↗</span><div class="library-main"><strong>${escapeHtml(link.title)}</strong><small>${escapeHtml(link.category)} · ${escapeHtml(link.url)}</small></div><a class="library-go" href="${escapeHtml(safeExternalUrl(link.url))}" target="_blank" rel="noopener noreferrer" aria-label="Apri link">↗</a><button class="micro-action" data-delete-link="${escapeHtml(link.id)}" aria-label="Elimina link">×</button></article>`).join('');
   $('library-empty-hint').hidden = shown.length > 0;
 }
-function renderAll() { renderTasks(); renderApps(); renderNotes(); renderLinks(); applyAccent(state.accent, false); }
+function renderAll() { renderTasks(); renderApps(); renderNotes(); renderLinks(); applyAccent(state.accent, false); applyMetalLevel(state.metalLevel || 'medium', false); }
 function applyAccent(color, persist=true) {
   if (!/^#[0-9a-f]{6}$/i.test(color)) color = '#b8f36c';
   const num = color.slice(1); const r = parseInt(num.slice(0,2),16), g = parseInt(num.slice(2,4),16), b = parseInt(num.slice(4,6),16);
@@ -153,6 +356,12 @@ function applyAccent(color, persist=true) {
   document.documentElement.style.setProperty('--accent-rgb', `${r},${g},${b}`);
   document.querySelectorAll('.accent-choice').forEach(btn => btn.classList.toggle('selected', btn.dataset.accent.toLowerCase() === color.toLowerCase()));
   if (persist) { state.accent = color; saveState(); }
+}
+function applyMetalLevel(level, persist=true) {
+  const valid = ['soft','medium','strong'].includes(level) ? level : 'medium';
+  if (document.body) document.body.dataset.metalLevel = valid;
+  document.querySelectorAll('[data-metal-level]').forEach(btn => btn.classList.toggle('selected', btn.dataset.metalLevel === valid));
+  if (persist) { state.metalLevel = valid; saveState(); }
 }
 function setView(name) {
   if (!document.querySelector(`[data-view-panel="${name}"]`)) return;
@@ -209,9 +418,9 @@ function toggleTimer() {
   focusTimer=window.setInterval(()=>{timerRemaining=Math.max(0,Math.ceil((timerEndAt-Date.now())/1000));if(timerRemaining<=0){timerRunning=false;clearInterval(focusTimer);focusTimer=null;toast('Sessione focus completata. Ottimo lavoro!');}updateTimerUI();},250);updateTimerUI();
 }
 function resetTimer(){timerRunning=false;clearInterval(focusTimer);focusTimer=null;timerRemaining=state.timerMinutes*60;updateTimerUI();}
-function exportData(){const payload={app:'FogOS',version:'1.0.0',exportedAt:new Date().toISOString(),data:state};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`fogos-backup-${new Date().toISOString().slice(0,10)}.json`;document.body.append(a);a.click();a.remove();URL.revokeObjectURL(url);toast('Backup esportato.');}
+function exportData(){const payload={app:'FogOS',version:'1.1.0',exportedAt:new Date().toISOString(),data:state};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`fogos-backup-${new Date().toISOString().slice(0,10)}.json`;document.body.append(a);a.click();a.remove();URL.revokeObjectURL(url);toast('Backup esportato.');}
 function importData(event){const file=event.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));const incoming=parsed.data||parsed;if(!Array.isArray(incoming.tasks)||!Array.isArray(incoming.notes)||!Array.isArray(incoming.apps)||!Array.isArray(incoming.links))throw new Error('Formato backup non valido');askConfirm('Importare il backup?', 'Le attività, le note, le app e i link attuali verranno sostituiti dai dati contenuti nel file.',()=>{state={...clone(defaults),...incoming};saveState();renderAll();toast('Backup importato.');});}catch(err){toast('Il file non sembra un backup FogOS valido.',true);}event.target.value='';};reader.readAsText(file);}
-function resetWorkspace(){askConfirm('Reimpostare FogOS?', 'Le attività, le note e i link personali verranno cancellati. Le app iniziali verranno mantenute.',()=>{state=clone(defaults);state.tasks=[];state.notes=[];state.links=[];saveState();renderAll();resetTimer();toast('Workspace reimpostato.');});}
+function resetWorkspace(){askConfirm('Reimpostare FogOS?', 'Le attività, le note e i link verranno rimossi; se sei connesso, la cancellazione sarà sincronizzata anche sul cloud. Le app iniziali verranno mantenute.',()=>{state=clone(defaults);state.tasks=[];state.notes=[];state.links=[];saveState();renderAll();resetTimer();toast('Workspace reimpostato.');});}
 function searchGlobal(query){const q=query.trim().toLowerCase();if(!q)return;const task=state.tasks.find(t=>t.title.toLowerCase().includes(q));const note=state.notes.find(n=>(n.title+' '+n.body).toLowerCase().includes(q));const app=state.apps.find(a=>(a.name+' '+a.description).toLowerCase().includes(q));const link=state.links.find(l=>(l.title+' '+l.url).toLowerCase().includes(q));if(task){setView('tasks');toast(`Attività trovata: ${task.title}`);}else if(note){setView('notes');$('note-search').value=query;renderNotes();toast(`Nota trovata: ${note.title}`);}else if(app){setView('apps');$('app-filter').value=query;renderApps();toast(`App trovata: ${app.name}`);}else if(link){setView('library');$('link-filter').value=query;renderLinks();toast(`Link trovato: ${link.title}`);}else{toast('Nessun risultato trovato.');}}
 function handleClick(event){
  const viewButton=event.target.closest('[data-view]');if(viewButton){setView(viewButton.dataset.view);return;}
@@ -223,9 +432,11 @@ function handleClick(event){
  const openApp=event.target.closest('[data-open-app]');if(openApp && !event.target.closest('[data-edit-app]')){const app=state.apps.find(a=>a.id===openApp.dataset.openApp);if(!app)return;const url=safeExternalUrl(app.url);if(url){window.open(url,'_blank','noopener,noreferrer');}else{openAppEditor(app.id);toast('Imposta il link di questa app per aprirla.');}return;}
  const delLink=event.target.closest('[data-delete-link]');if(delLink){requestDeleteLink(delLink.dataset.deleteLink);return;}
  const accent=event.target.closest('[data-accent]');if(accent){applyAccent(accent.dataset.accent);return;}
+ const metal=event.target.closest('[data-metal-level]');if(metal){applyMetalLevel(metal.dataset.metalLevel);return;}
 }
 function setupEvents(){
  document.addEventListener('click',handleClick);
+ $('account-open').addEventListener('click',()=>openAccountModal('login'));$('account-settings-open').addEventListener('click',()=>openAccountModal('login'));$('account-settings-logout').addEventListener('click',logoutAccount);$('account-sync-now').addEventListener('click',()=>syncCloudNow({silent:false}));$('export-local-backup').addEventListener('click',exportLocalBackup);$('account-modal-close').addEventListener('click',()=>closeDialog('account-modal'));$('account-mode-login').addEventListener('click',()=>setAccountMode('login'));$('account-mode-register').addEventListener('click',()=>setAccountMode('register'));$('account-form').addEventListener('submit',submitAccountForm);$('account-show-password').addEventListener('change',event=>{const type=event.target.checked?'text':'password';$('account-password').type=type;$('account-password-confirm').type=type;});
  $('mobile-menu').addEventListener('click',()=>{$('sidebar').classList.toggle('mobile-open');$('mobile-scrim').classList.toggle('show');});$('mobile-scrim').addEventListener('click',()=>{$('sidebar').classList.remove('mobile-open');$('mobile-scrim').classList.remove('show');});
  $('hero-new-task').addEventListener('click',newTask);$('quick-add-task').addEventListener('click',newTask);$('task-page-add').addEventListener('click',newTask);$('task-modal').addEventListener('close',()=>{editingTaskId=null;});$('task-form').addEventListener('submit',saveTaskFromForm);
  $('new-note').addEventListener('click',newNote);$('note-form').addEventListener('submit',saveNoteFromForm);$('add-app').addEventListener('click',()=>openAppEditor());$('add-app-secondary').addEventListener('click',()=>openAppEditor());$('app-form').addEventListener('submit',saveAppFromForm);$('add-link').addEventListener('click',openLinkEditor);$('link-form').addEventListener('submit',saveLinkFromForm);$('confirm-action').addEventListener('click',confirmAction);
@@ -238,5 +449,5 @@ function setupEvents(){
 }
 function initPWA(){if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('Service worker registration failed',err)));}const installBtn=$('install-pwa');if(installBtn){installBtn.addEventListener('click',async()=>{if(!installPromptEvent){toast('Per installare: usa il menu Condividi del browser e scegli “Aggiungi alla schermata Home”.');return;}installPromptEvent.prompt();const choice=await installPromptEvent.userChoice;installPromptEvent=null;toast(choice?.outcome==='accepted'?'FogOS installato.':'Installazione non completata.');});}window.addEventListener('appinstalled',()=>toast('FogOS è stato installato.'));}
 function viewFromHash(){const candidate=(location.hash||'').replace(/^#/, '');if(['dashboard','apps','tasks','notes','library','settings'].includes(candidate))setView(candidate);}
-function init(){updateClock();window.setInterval(updateClock,15000);setupEvents();renderAll();updateTimerUI();initPWA();viewFromHash();window.addEventListener('hashchange',viewFromHash);}
+function init(){updateClock();window.setInterval(updateClock,15000);setupEvents();renderAll();updateTimerUI();updateAccountUI();initPWA();viewFromHash();window.addEventListener('hashchange',viewFromHash);initAccount();}
 document.addEventListener('DOMContentLoaded',init);

@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import re
+import sqlite3
 import shutil
 import subprocess
 import threading
@@ -48,8 +49,21 @@ for icon in manifest["icons"]:
 assert JS.stat().st_size > 10000 and (SITE / "styles.css").stat().st_size > 10000
 assert (ROOT / ".github/workflows/deploy.yml").exists()
 assert (ROOT / "README.md").exists() and (ROOT / "README-EN.md").exists()
+assert (ROOT / "functions/api/[[path]].js").exists(), 'Missing Cloudflare Pages API function'
+assert (ROOT / "migrations/0001_init.sql").exists(), 'Missing D1 migration'
+assert (SITE / "config.js").exists(), 'Missing frontend API configuration'
+with sqlite3.connect(':memory:') as db:
+    db.executescript((ROOT / "migrations/0001_init.sql").read_text(encoding='utf-8'))
+    table_names = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert {'users', 'sessions', 'user_data', 'auth_rate_limits'} <= table_names, 'D1 migration schema incomplete'
+html = HTML.read_text(encoding='utf-8')
+assert 'account-form' in html and 'Finitura metallica' in html, 'Missing account/metal UI'
+assert '/api/health' in script and '/api/auth/register' in script and '/api/data' in script, 'Missing cloud auth/sync client'
+assert "requestUrl.pathname.startsWith('/api/')" in (SITE / "sw.js").read_text(encoding='utf-8'), 'API must not be cached by the service worker'
 if shutil.which("node"):
     subprocess.run(["node", "--check", str(JS)], check=True)
+    subprocess.run(["node", "--check", str(ROOT / "functions/api/[[path]].js")], check=True)
+    subprocess.run(["node", str(ROOT / "tests/cloud-api-smoke.mjs")], check=True)
 
 class QuietHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -61,7 +75,7 @@ thread = threading.Thread(target=server.serve_forever, daemon=True)
 thread.start()
 try:
     base = f"http://127.0.0.1:{server.server_port}"
-    for path, content_type in (("/", "text/html"), ("/app.js", "javascript"), ("/styles.css", "text/css"), ("/manifest.webmanifest", "application/manifest+json"), ("/sw.js", "javascript"), ("/assets/icon-192.png", "image/png")):
+    for path, content_type in (("/", "text/html"), ("/app.js", "javascript"), ("/config.js", "javascript"), ("/styles.css", "text/css"), ("/manifest.webmanifest", "application/manifest+json"), ("/sw.js", "javascript"), ("/assets/icon-192.png", "image/png")):
         with urllib.request.urlopen(base + path, timeout=5) as response:
             body = response.read()
             assert response.status == 200 and body, f"Bad response for {path}"
@@ -69,4 +83,4 @@ try:
 finally:
     server.shutdown()
     server.server_close()
-print("FogOS static smoke checks passed: HTML IDs, JS syntax/references, local assets, PWA manifest/icons, HTTP assets.")
+print("FogOS checks passed: static assets, HTML/JS IDs, PWA manifest, D1 schema and Cloud API registration/login/sync/logout smoke tests.")
